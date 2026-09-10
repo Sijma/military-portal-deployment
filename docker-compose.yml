@@ -1,0 +1,118 @@
+
+networks:
+  public:
+  internal:
+    internal: true
+
+services:
+  apisix:
+    build:
+      context: apisix
+    ports:
+      - "9080:9080"
+    environment:
+      APISIX_OIDC_CLIENT_SECRET: "${APISIX_OIDC_CLIENT_SECRET}"
+      APISIX_SESSION_SECRET: "${APISIX_SESSION_SECRET}"
+    networks:
+      - public
+      - internal
+    depends_on:
+      - keycloak
+      - citizen-service
+      - officer-service
+      - admin-service
+      - frontend
+
+  keycloak:
+    image: keycloak/keycloak:26.7
+    command: start-dev --import-realm --hostname-backchannel-dynamic=true
+    networks:
+      - internal
+      - public
+    ports:
+      - "8080:8080"
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: "${KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME}"
+      KC_BOOTSTRAP_ADMIN_PASSWORD: "${KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD}"
+      APISIX_OIDC_CLIENT_SECRET: "${APISIX_OIDC_CLIENT_SECRET}"
+      CITIZEN_DEMO_PASSWORD: "${CITIZEN_DEMO_PASSWORD}"
+      OFFICER_DEMO_PASSWORD: "${OFFICER_DEMO_PASSWORD}"
+      ADMIN_DEMO_PASSWORD: "${ADMIN_DEMO_PASSWORD}"
+      KC_HOSTNAME: "http://localhost:8080"
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+
+  postgres:
+    image: postgres:18-alpine3.24
+    networks:
+      - internal
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB}"
+      POSTGRES_USER: "${POSTGRES_ADMIN_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_ADMIN_PASSWORD}"
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Same image deployed 3 times, SERVICE_ROLE defines which version gets deployed
+  citizen-service:
+    build: backend
+    networks:
+      - internal
+    environment:
+      SERVICE_ROLE: citizen
+      BIND_ADDR: "0.0.0.0:8081"
+      DATABASE_URL: "postgres://postgres:5432"
+      PGUSER: "${POSTGRES_ADMIN_USER}"
+      PGPASSWORD: "${POSTGRES_ADMIN_PASSWORD}"
+      PGDATABASE: "${POSTGRES_DB}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  officer-service:
+    build: backend
+    networks:
+      - internal
+    environment:
+      SERVICE_ROLE: officer
+      BIND_ADDR: "0.0.0.0:8082"
+      DATABASE_URL: "postgres://postgres:5432"
+      PGUSER: "${POSTGRES_ADMIN_USER}"
+      PGPASSWORD: "${POSTGRES_ADMIN_PASSWORD}"
+      PGDATABASE: "${POSTGRES_DB}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  admin-service:
+    build: backend
+    networks:
+      - internal
+    environment:
+      SERVICE_ROLE: admin
+      BIND_ADDR: "0.0.0.0:8083"
+      DATABASE_URL: "postgres://postgres:5432"
+      PGUSER: "${POSTGRES_ADMIN_USER}"
+      PGPASSWORD: "${POSTGRES_ADMIN_PASSWORD}"
+      PGDATABASE: "${POSTGRES_DB}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build: frontend
+    networks:
+      - internal
+
+volumes:
+  pgdata:
+  keycloak_data:
