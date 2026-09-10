@@ -1,0 +1,113 @@
+# We need two oidc definitions: 1 to handle the entry point and another to handle internal api calls,
+# as each should handle bad auth (401 instead of redirect to keycloak for internal api calls)
+plugin_configs:
+  - id: oidc-browser
+    plugins:
+      openid-connect:
+        client_id: "apisix"
+        client_secret: "$ENV://APISIX_OIDC_CLIENT_SECRET"
+        discovery: "http://keycloak:8080/realms/military-portal/.well-known/openid-configuration"
+        token_endpoint: "http://keycloak:8080/realms/military-portal/protocol/openid-connect/token"
+        userinfo_endpoint: "http://keycloak:8080/realms/military-portal/protocol/openid-connect/userinfo"
+        scope: "openid profile email roles"
+        bearer_only: false
+        use_pkce: true
+        redirect_uri: "http://localhost:9080/callback"
+        logout_path: "/logout"
+        post_logout_redirect_uri: "http://localhost:9080/"
+        set_userinfo_header: true
+        session:
+          secret: "$ENV://APISIX_SESSION_SECRET"
+        unauth_action: "auth"
+
+  - id: oidc-api
+    plugins:
+      openid-connect:
+        client_id: "apisix"
+        client_secret: "$ENV://APISIX_OIDC_CLIENT_SECRET"
+        discovery: "http://keycloak:8080/realms/military-portal/.well-known/openid-configuration"
+        token_endpoint: "http://keycloak:8080/realms/military-portal/protocol/openid-connect/token"
+        userinfo_endpoint: "http://keycloak:8080/realms/military-portal/protocol/openid-connect/userinfo"
+        scope: "openid profile email roles"
+        bearer_only: false
+        use_pkce: true
+        redirect_uri: "http://localhost:9080/callback"
+        logout_path: "/logout"
+        post_logout_redirect_uri: "http://localhost:9080/"
+        set_userinfo_header: true
+        session:
+          secret: "$ENV://APISIX_SESSION_SECRET"
+        unauth_action: "deny"
+
+routes:
+  - id: api-me
+    uri: "/api/me"
+    priority: 200
+    plugin_config_id: oidc-api
+    plugins:
+      app-auth:
+        role: any
+        respond_with_identity: true
+
+  - id: api-citizen
+    uris: ["/api/citizen", "/api/citizen/*"]
+    priority: 100
+    plugin_config_id: oidc-api
+
+    plugins:
+      app-auth:
+        role: citizen
+
+      # Removes the request uri prefix that goes into the backend.
+      proxy-rewrite:
+        regex_uri: ["^/api/citizen/?(.*)", "/${1}"]
+
+    upstream:
+      type: roundrobin
+      nodes:
+        "citizen-service:8081": 1
+
+  - id: api-officer
+    uris: [ "/api/officer", "/api/officer/*" ]
+    priority: 100
+    plugin_config_id: oidc-api
+
+    plugins:
+      app-auth:
+        role: officer
+
+      proxy-rewrite:
+        regex_uri: [ "^/api/officer/?(.*)", "/${1}" ]
+
+    upstream:
+      type: roundrobin
+      nodes:
+        "officer-service:8082": 1
+
+  - id: api-admin
+    uris: [ "/api/admin", "/api/admin/*" ]
+    priority: 100
+    plugin_config_id: oidc-api
+
+    plugins:
+      app-auth:
+        role: admin
+
+      proxy-rewrite:
+        regex_uri: [ "^/api/admin/?(.*)", "/${1}" ]
+
+    upstream:
+      type: roundrobin
+      nodes:
+        "admin-service:8083": 1
+
+  - id: spa
+    uri: "/*"
+    priority: 1
+    plugin_config_id: oidc-browser
+
+    upstream:
+      type: roundrobin
+      nodes:
+        "frontend:80": 1
+#END
