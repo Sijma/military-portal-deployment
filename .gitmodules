@@ -1,0 +1,6 @@
+[submodule "backend"]
+	path = backend
+	url = ssh://git@github.com/Sijma/military-portal/
+[submodule "frontend"]
+	path = frontend
+	url = ssh://git@github.com/Sijma/military-portal-frontend
