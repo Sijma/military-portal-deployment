@@ -62,6 +62,14 @@ services:
       timeout: 5s
       retries: 10
 
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    networks:
+      - public
+      - internal
+    ports:
+      - "8025:8025"
+
   # Same image deployed 3 times, SERVICE_ROLE defines which version gets deployed
   citizen-service:
     build: backend
@@ -74,9 +82,14 @@ services:
       PGUSER: "${POSTGRES_ADMIN_USER}"
       PGPASSWORD: "${POSTGRES_ADMIN_PASSWORD}"
       PGDATABASE: "${POSTGRES_DB}"
+      MAIL_HOST: "${MAIL_HOST}"
+      MAIL_PORT: "${MAIL_PORT}"
+      MAIL_FROM: "${MAIL_FROM}"
     depends_on:
       postgres:
         condition: service_healthy
+      mailhog:
+        condition: service_started
 
   officer-service:
     build: backend
@@ -89,9 +102,14 @@ services:
       PGUSER: "${POSTGRES_ADMIN_USER}"
       PGPASSWORD: "${POSTGRES_ADMIN_PASSWORD}"
       PGDATABASE: "${POSTGRES_DB}"
+      MAIL_HOST: "${MAIL_HOST}"
+      MAIL_PORT: "${MAIL_PORT}"
+      MAIL_FROM: "${MAIL_FROM}"
     depends_on:
       postgres:
         condition: service_healthy
+      mailhog:
+        condition: service_started
 
   admin-service:
     build: backend
@@ -104,9 +122,14 @@ services:
       PGUSER: "${POSTGRES_ADMIN_USER}"
       PGPASSWORD: "${POSTGRES_ADMIN_PASSWORD}"
       PGDATABASE: "${POSTGRES_DB}"
+      MAIL_HOST: "${MAIL_HOST}"
+      MAIL_PORT: "${MAIL_PORT}"
+      MAIL_FROM: "${MAIL_FROM}"
     depends_on:
       postgres:
         condition: service_healthy
+      mailhog:
+        condition: service_started
 
   frontend:
     build: frontend
