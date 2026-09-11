@@ -1,1 +1,3 @@
 .env
+.idea/
+ansible/inventory/group_vars/all/vault.yml
