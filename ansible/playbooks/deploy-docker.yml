@@ -1,0 +1,25 @@
+---
+- name: Deploy the app with docker compose
+  hosts: docker_hosts
+
+  tasks:
+    - name: make app dir
+      ansible.builtin.file:
+        path: ~/app
+        state: directory
+
+    - name: copy compose file
+      copy:
+        src: ../../docker-compose.yml
+        dest: ~/app
+
+    - name: copy secrets .env
+      copy:
+        src: ../../.env
+        dest: ~/app
+
+    - name: Start services using Docker Compose
+      community.docker.docker_compose_v2:
+        project_src: ~/app
+        state: present
+        pull: missing
