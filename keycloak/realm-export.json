@@ -26,7 +26,7 @@
   "oauth2DeviceCodeLifespan": 600,
   "oauth2DevicePollingInterval": 5,
   "enabled": true,
-  "sslRequired": "external",
+  "sslRequired": "${KEYCLOAK_SSL_REQUIRED}",
   "registrationAllowed": false,
   "registrationEmailAsUsername": true,
   "rememberMe": true,
@@ -638,19 +638,19 @@
       "clientId": "apisix",
       "name": "",
       "description": "",
-      "rootUrl": "http://localhost:9080/",
-      "adminUrl": "http://localhost:9080/",
-      "baseUrl": "http://localhost:9080/",
+      "rootUrl": "${PORTAL_PUBLIC_URL}/",
+      "adminUrl": "${PORTAL_PUBLIC_URL}/",
+      "baseUrl": "${PORTAL_PUBLIC_URL}/",
       "surrogateAuthRequired": false,
       "enabled": true,
       "alwaysDisplayInConsole": true,
       "clientAuthenticatorType": "client-secret",
       "secret": "${APISIX_OIDC_CLIENT_SECRET}",
       "redirectUris": [
-        "http://localhost:9080/callback"
+        "${PORTAL_PUBLIC_URL}/callback"
       ],
       "webOrigins": [
-        "http://localhost:9080"
+        "${PORTAL_PUBLIC_URL}"
       ],
       "notBefore": 0,
       "bearerOnly": false,
@@ -669,7 +669,7 @@
         "backchannel.logout.session.required": "true",
         "standard.token.exchange.enabled": "false",
         "oauth2.jwt.authorization.grant.enabled": "false",
-        "post.logout.redirect.uris": "http://localhost:9080/",
+        "post.logout.redirect.uris": "${PORTAL_PUBLIC_URL}/",
         "oauth2.device.authorization.grant.enabled": "false",
         "pkce.code.challenge.method": "S256",
         "backchannel.logout.revoke.offline.tokens": "false",
