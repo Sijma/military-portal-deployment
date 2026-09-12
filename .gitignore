@@ -1,3 +1,6 @@
 .env
 .idea/
-ansible/inventory/group_vars/all/vault.yml
+env/*
+
+# exclude files that end with .example
+!env/*.example

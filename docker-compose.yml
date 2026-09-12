@@ -1,4 +1,3 @@
-
 networks:
   public:
   internal:
@@ -13,6 +12,14 @@ services:
     environment:
       APISIX_OIDC_CLIENT_SECRET: "${APISIX_OIDC_CLIENT_SECRET}"
       APISIX_SESSION_SECRET: "${APISIX_SESSION_SECRET}"
+      KEYCLOAK_HOST: "${KEYCLOAK_HOST}"
+      BROWSER_BASE_URL: "${BROWSER_BASE_URL}"
+
+      CITIZEN_HOST: "citizen-service"
+      OFFICER_HOST: "officer-service"
+      ADMIN_HOST: "admin-service"
+      FRONTEND_HOST: "frontend"
+      MAIL_HOST: "mailhog"
     networks:
       - public
       - internal
@@ -24,7 +31,7 @@ services:
       - frontend
 
   keycloak:
-    image: keycloak/keycloak:26.7
+    build: keycloak
     command: start-dev --import-realm --hostname-backchannel-dynamic=true
     networks:
       - internal
@@ -32,21 +39,24 @@ services:
     ports:
       - "8080:8080"
     environment:
-      KC_BOOTSTRAP_ADMIN_USERNAME: "${KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME}"
-      KC_BOOTSTRAP_ADMIN_PASSWORD: "${KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD}"
+      KC_BOOTSTRAP_ADMIN_USERNAME: "${KEYCLOAK_ADMIN_USERNAME}"
+      KC_BOOTSTRAP_ADMIN_PASSWORD: "${KEYCLOAK_ADMIN_PASSWORD}"
       APISIX_OIDC_CLIENT_SECRET: "${APISIX_OIDC_CLIENT_SECRET}"
+
+      BROWSER_BASE_URL: "${BROWSER_BASE_URL}"
+      KEYCLOAK_SSL_REQUIRED: "${KEYCLOAK_SSL_REQUIRED}"
       CITIZEN_DEMO_PASSWORD: "${CITIZEN_DEMO_PASSWORD}"
       OFFICER_DEMO_PASSWORD: "${OFFICER_DEMO_PASSWORD}"
       ADMIN_DEMO_PASSWORD: "${ADMIN_DEMO_PASSWORD}"
-      KC_HOSTNAME: "http://localhost:8080"
+
       KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME: "${BROWSER_BASE_URL}"
       KC_HOSTNAME_STRICT: "false"
     volumes:
       - keycloak_data:/opt/keycloak/data
-      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
 
   postgres:
-    image: postgres:18-alpine3.24
+    build: postgres
     networks:
       - internal
     environment:
@@ -55,7 +65,6 @@ services:
       POSTGRES_PASSWORD: "${POSTGRES_ADMIN_PASSWORD}"
     volumes:
       - pgdata:/var/lib/postgresql
-      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 5s
@@ -64,6 +73,7 @@ services:
 
   mailhog:
     image: mailhog/mailhog:v1.0.1
+    command: ["-ui-web-path", "mail"] # makes the ui available on /mail.
     networks:
       - public
       - internal
@@ -72,6 +82,8 @@ services:
 
   # Same image deployed 3 times, SERVICE_ROLE defines which version gets deployed
   citizen-service:
+    # When --build is not used, this fetches the published github image. Tag defaults to 'latest' if none is provided.
+    image: "${PORTAL_IMAGE_PREFIX:-ghcr.io/sijma}/military-portal-backend:${PORTAL_IMAGE_TAG:-latest}"
     build: backend
     networks:
       - internal
@@ -82,7 +94,7 @@ services:
       PGUSER: "${POSTGRES_ADMIN_USER}"
       PGPASSWORD: "${POSTGRES_ADMIN_PASSWORD}"
       PGDATABASE: "${POSTGRES_DB}"
-      MAIL_HOST: "${MAIL_HOST}"
+      MAIL_HOST: "mailhog"
       MAIL_PORT: "${MAIL_PORT}"
       MAIL_FROM: "${MAIL_FROM}"
     depends_on:
@@ -92,6 +104,7 @@ services:
         condition: service_started
 
   officer-service:
+    image: "${PORTAL_IMAGE_PREFIX:-ghcr.io/sijma}/military-portal-backend:${PORTAL_IMAGE_TAG:-latest}"
     build: backend
     networks:
       - internal
@@ -102,7 +115,7 @@ services:
       PGUSER: "${POSTGRES_ADMIN_USER}"
       PGPASSWORD: "${POSTGRES_ADMIN_PASSWORD}"
       PGDATABASE: "${POSTGRES_DB}"
-      MAIL_HOST: "${MAIL_HOST}"
+      MAIL_HOST: "mailhog"
       MAIL_PORT: "${MAIL_PORT}"
       MAIL_FROM: "${MAIL_FROM}"
     depends_on:
@@ -112,6 +125,7 @@ services:
         condition: service_started
 
   admin-service:
+    image: "${PORTAL_IMAGE_PREFIX:-ghcr.io/sijma}/military-portal-backend:${PORTAL_IMAGE_TAG:-latest}"
     build: backend
     networks:
       - internal
@@ -122,7 +136,7 @@ services:
       PGUSER: "${POSTGRES_ADMIN_USER}"
       PGPASSWORD: "${POSTGRES_ADMIN_PASSWORD}"
       PGDATABASE: "${POSTGRES_DB}"
-      MAIL_HOST: "${MAIL_HOST}"
+      MAIL_HOST: "mailhog"
       MAIL_PORT: "${MAIL_PORT}"
       MAIL_FROM: "${MAIL_FROM}"
     depends_on:
@@ -132,6 +146,7 @@ services:
         condition: service_started
 
   frontend:
+    image: "${PORTAL_IMAGE_PREFIX:-ghcr.io/sijma}/military-portal-frontend:${PORTAL_IMAGE_TAG:-latest}"
     build: frontend
     networks:
       - internal

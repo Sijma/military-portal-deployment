@@ -638,19 +638,19 @@
       "clientId": "apisix",
       "name": "",
       "description": "",
-      "rootUrl": "${PORTAL_PUBLIC_URL}/",
-      "adminUrl": "${PORTAL_PUBLIC_URL}/",
-      "baseUrl": "${PORTAL_PUBLIC_URL}/",
+      "rootUrl": "${BROWSER_BASE_URL}/",
+      "adminUrl": "${BROWSER_BASE_URL}/",
+      "baseUrl": "${BROWSER_BASE_URL}/",
       "surrogateAuthRequired": false,
       "enabled": true,
       "alwaysDisplayInConsole": true,
       "clientAuthenticatorType": "client-secret",
       "secret": "${APISIX_OIDC_CLIENT_SECRET}",
       "redirectUris": [
-        "${PORTAL_PUBLIC_URL}/callback"
+        "${BROWSER_BASE_URL}/callback"
       ],
       "webOrigins": [
-        "${PORTAL_PUBLIC_URL}"
+        "${BROWSER_BASE_URL}"
       ],
       "notBefore": 0,
       "bearerOnly": false,
@@ -669,7 +669,7 @@
         "backchannel.logout.session.required": "true",
         "standard.token.exchange.enabled": "false",
         "oauth2.jwt.authorization.grant.enabled": "false",
-        "post.logout.redirect.uris": "${PORTAL_PUBLIC_URL}/",
+        "post.logout.redirect.uris": "${BROWSER_BASE_URL}/",
         "oauth2.device.authorization.grant.enabled": "false",
         "pkce.code.challenge.method": "S256",
         "backchannel.logout.revoke.offline.tokens": "false",
