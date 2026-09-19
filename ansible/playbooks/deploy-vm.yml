@@ -79,7 +79,6 @@
       ansible.builtin.import_tasks: tasks/deploy-vm/frontend/tls.yml
       vars:
         portal_domain: "{{ BROWSER_BASE_URL | urlsplit('hostname') }}"
-        portal_cert_live: "/etc/letsencrypt/live/{{ portal_domain }}/fullchain.pem"
       tags: [frontend, tls]
 
     - name: Load APISIX tasks
