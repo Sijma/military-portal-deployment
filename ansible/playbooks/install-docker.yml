@@ -1,15 +1,15 @@
---- #
+---
 - name: Install Docker
   hosts: docker_hosts
   become: true
 
   tasks:
     - name: Update apt cache
-      ansible.builtin.apt:
+      apt:
         update_cache: yes
 
     - name: Ensure dependencies are installed
-      ansible.builtin.package:
+      package:
         name:
           - bc
           - curl
@@ -18,36 +18,26 @@
           - ca-certificates
         state: present
 
-    - name: Create GPG key dir
-      ansible.builtin.file:
-        path: /etc/apt/keyrings
-        state: directory
-        mode: "0755"
-
-    - name: Download GPG key
-      ansible.builtin.get_url:
-        url: https://download.docker.com/linux/ubuntu/gpg
-        dest: /etc/apt/keyrings/docker.asc
-        mode: "0644"
-
     - name: Add Docker repository to apt
-      ansible.builtin.deb822_repository:
+      deb822_repository:
         name: docker
         types: deb
         uris: https://download.docker.com/linux/ubuntu
         suites: "{{ ansible_facts['distribution_release'] }}"
         components: stable
-        architectures: "{{ ansible_facts['architecture'] | replace('x86_64', 'amd64') }}"
+        architectures: >-
+          {{ {'x86_64': 'amd64', 'aarch64': 'arm64'}.get(
+            ansible_facts.architecture, ansible_facts.architecture) }}
         signed_by: https://download.docker.com/linux/ubuntu/gpg
         state: present
         enabled: yes
 
     - name: Update apt cache with repo
-      ansible.builtin.apt:
+      apt:
         update_cache: yes
 
     - name: Install Docker and Compose
-      ansible.builtin.package:
+      package:
         name:
           - docker-ce
           - docker-ce-cli
@@ -61,9 +51,3 @@
         name: docker
         state: started
         enabled: yes
-
-    - name: Add sijma user to docker group
-      ansible.builtin.user:
-        name: sijma
-        groups: docker
-        append: yes

@@ -1,25 +1,70 @@
 ---
 - name: Deploy the app with docker compose
   hosts: docker_hosts
+  become: true
+  vars:
+    compose_project_dir: /opt/military-portal
+    compose_environment:
+      BROWSER_BASE_URL: "{{ BROWSER_BASE_URL }}"
+      PORTAL_HTTP_PORT: "{{ PORTAL_HTTP_PORT }}"
+      KEYCLOAK_ADMIN_USERNAME: "{{ KEYCLOAK_ADMIN_USERNAME }}"
+      KEYCLOAK_ADMIN_PASSWORD: "{{ KEYCLOAK_ADMIN_PASSWORD }}"
+      CITIZEN_DEMO_PASSWORD: "{{ CITIZEN_DEMO_PASSWORD }}"
+      OFFICER_DEMO_PASSWORD: "{{ OFFICER_DEMO_PASSWORD }}"
+      ADMIN_DEMO_PASSWORD: "{{ ADMIN_DEMO_PASSWORD }}"
+      APISIX_OIDC_CLIENT_SECRET: "{{ APISIX_OIDC_CLIENT_SECRET }}"
+      APISIX_SESSION_SECRET: "{{ APISIX_SESSION_SECRET }}"
+      POSTGRES_DB: "{{ POSTGRES_DB }}"
+      POSTGRES_ADMIN_USER: "{{ POSTGRES_ADMIN_USER }}"
+      POSTGRES_ADMIN_PASSWORD: "{{ POSTGRES_ADMIN_PASSWORD }}"
+      PORTAL_DB_USER: "{{ PORTAL_DB_USER }}"
+      PORTAL_DB_PASSWORD: "{{ PORTAL_DB_PASSWORD }}"
+      KEYCLOAK_DB_NAME: "{{ KEYCLOAK_DB_NAME }}"
+      KEYCLOAK_DB_USER: "{{ KEYCLOAK_DB_USER }}"
+      KEYCLOAK_DB_PASSWORD: "{{ KEYCLOAK_DB_PASSWORD }}"
+      MAIL_PORT: "{{ MAIL_PORT }}"
+      MAIL_FROM: "{{ MAIL_FROM }}"
+      PORTAL_IMAGE_PREFIX: "{{ PORTAL_IMAGE_PREFIX }}"
+      PORTAL_IMAGE_TAG: "{{ PORTAL_IMAGE_TAG }}"
+      KEYCLOAK_SSL_REQUIRED: "{{ KEYCLOAK_SSL_REQUIRED }}"
 
   tasks:
     - name: make app dir
-      ansible.builtin.file:
-        path: ~/app
+      file:
+        path: "{{ compose_project_dir }}"
         state: directory
 
     - name: copy compose file
       copy:
         src: ../../docker-compose.yml
-        dest: ~/app
+        dest: "{{ compose_project_dir }}/docker-compose.yml"
 
-    - name: copy secrets .env
+    - name: Copy the build contexts
       copy:
-        src: ../../.env
-        dest: ~/app
+        src: "../../{{ item }}"
+        dest: "{{ compose_project_dir }}/"
+      loop: [apisix, keycloak, postgres]
+
+    - name: Pull images from github
+      community.docker.docker_compose_v2_pull:
+        project_src: "{{ compose_project_dir }}"
+        files:
+          - docker-compose.yml
+        services:
+          - citizen-service
+          - frontend
+          - mailhog
+        policy: always
+      environment: "{{ compose_environment }}"
+      no_log: true
 
     - name: Start services using Docker Compose
       community.docker.docker_compose_v2:
-        project_src: ~/app
+        project_src: "{{ compose_project_dir }}"
+        files:
+          - docker-compose.yml
         state: present
-        pull: missing
+        build: always
+        pull: never
+      environment: "{{ compose_environment }}"
+      no_log: true

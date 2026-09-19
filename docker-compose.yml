@@ -8,11 +8,11 @@ services:
     build:
       context: apisix
     ports:
-      - "9080:9080"
+      - "${PORTAL_HTTP_PORT:-9080}:9080"
     environment:
       APISIX_OIDC_CLIENT_SECRET: "${APISIX_OIDC_CLIENT_SECRET}"
       APISIX_SESSION_SECRET: "${APISIX_SESSION_SECRET}"
-      KEYCLOAK_HOST: "${KEYCLOAK_HOST}"
+      KEYCLOAK_HOST: "keycloak"
       BROWSER_BASE_URL: "${BROWSER_BASE_URL}"
 
       CITIZEN_HOST: "citizen-service"
@@ -23,6 +23,7 @@ services:
     networks:
       - public
       - internal
+    restart: unless-stopped
     depends_on:
       - keycloak
       - citizen-service
@@ -32,12 +33,9 @@ services:
 
   keycloak:
     build: keycloak
-    command: start-dev --import-realm --hostname-backchannel-dynamic=true
+    command: start --import-realm --hostname-backchannel-dynamic=true
     networks:
       - internal
-      - public
-    ports:
-      - "8080:8080"
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: "${KEYCLOAK_ADMIN_USERNAME}"
       KC_BOOTSTRAP_ADMIN_PASSWORD: "${KEYCLOAK_ADMIN_PASSWORD}"
@@ -49,11 +47,18 @@ services:
       OFFICER_DEMO_PASSWORD: "${OFFICER_DEMO_PASSWORD}"
       ADMIN_DEMO_PASSWORD: "${ADMIN_DEMO_PASSWORD}"
 
+      KC_DB: "postgres"
+      KC_DB_URL: "jdbc:postgresql://postgres:5432/${KEYCLOAK_DB_NAME}"
+      KC_DB_USERNAME: "${KEYCLOAK_DB_USER}"
+      KC_DB_PASSWORD: "${KEYCLOAK_DB_PASSWORD}"
       KC_HTTP_ENABLED: "true"
       KC_HOSTNAME: "${BROWSER_BASE_URL}"
-      KC_HOSTNAME_STRICT: "false"
-    volumes:
-      - keycloak_data:/opt/keycloak/data
+      KC_HOSTNAME_STRICT: "true"
+      KC_PROXY_HEADERS: "xforwarded"
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   postgres:
     build: postgres
@@ -63,6 +68,11 @@ services:
       POSTGRES_DB: "${POSTGRES_DB}"
       POSTGRES_USER: "${POSTGRES_ADMIN_USER}"
       POSTGRES_PASSWORD: "${POSTGRES_ADMIN_PASSWORD}"
+      PORTAL_DB_USER: "${PORTAL_DB_USER}"
+      PORTAL_DB_PASSWORD: "${PORTAL_DB_PASSWORD}"
+      KEYCLOAK_DB_NAME: "${KEYCLOAK_DB_NAME}"
+      KEYCLOAK_DB_USER: "${KEYCLOAK_DB_USER}"
+      KEYCLOAK_DB_PASSWORD: "${KEYCLOAK_DB_PASSWORD}"
     volumes:
       - pgdata:/var/lib/postgresql
     healthcheck:
@@ -70,29 +80,26 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
   mailhog:
     image: mailhog/mailhog:v1.0.1
     command: ["-ui-web-path", "mail"] # makes the ui available on /mail.
     networks:
-      - public
       - internal
-    ports:
-      - "8025:8025"
+    restart: unless-stopped
 
-  # Same image deployed 3 times, SERVICE_ROLE defines which version gets deployed
+  # Same image deployed 3 times; the instance selects the routes and listen port.
   citizen-service:
     # When --build is not used, this fetches the published github image. Tag defaults to 'latest' if none is provided.
     image: "${PORTAL_IMAGE_PREFIX:-ghcr.io/sijma}/military-portal-backend:${PORTAL_IMAGE_TAG:-latest}"
-    build: backend
+    command: ["--service-instance", "citizen:8081", "--bind-host", "0.0.0.0"]
     networks:
       - internal
     environment:
-      SERVICE_ROLE: citizen
-      BIND_ADDR: "0.0.0.0:8081"
       DATABASE_URL: "postgres://postgres:5432"
-      PGUSER: "${POSTGRES_ADMIN_USER}"
-      PGPASSWORD: "${POSTGRES_ADMIN_PASSWORD}"
+      PGUSER: "${PORTAL_DB_USER}"
+      PGPASSWORD: "${PORTAL_DB_PASSWORD}"
       PGDATABASE: "${POSTGRES_DB}"
       MAIL_HOST: "mailhog"
       MAIL_PORT: "${MAIL_PORT}"
@@ -102,18 +109,17 @@ services:
         condition: service_healthy
       mailhog:
         condition: service_started
+    restart: unless-stopped
 
   officer-service:
     image: "${PORTAL_IMAGE_PREFIX:-ghcr.io/sijma}/military-portal-backend:${PORTAL_IMAGE_TAG:-latest}"
-    build: backend
+    command: ["--service-instance", "officer:8082", "--bind-host", "0.0.0.0"]
     networks:
       - internal
     environment:
-      SERVICE_ROLE: officer
-      BIND_ADDR: "0.0.0.0:8082"
       DATABASE_URL: "postgres://postgres:5432"
-      PGUSER: "${POSTGRES_ADMIN_USER}"
-      PGPASSWORD: "${POSTGRES_ADMIN_PASSWORD}"
+      PGUSER: "${PORTAL_DB_USER}"
+      PGPASSWORD: "${PORTAL_DB_PASSWORD}"
       PGDATABASE: "${POSTGRES_DB}"
       MAIL_HOST: "mailhog"
       MAIL_PORT: "${MAIL_PORT}"
@@ -123,18 +129,17 @@ services:
         condition: service_healthy
       mailhog:
         condition: service_started
+    restart: unless-stopped
 
   admin-service:
     image: "${PORTAL_IMAGE_PREFIX:-ghcr.io/sijma}/military-portal-backend:${PORTAL_IMAGE_TAG:-latest}"
-    build: backend
+    command: ["--service-instance", "admin:8083", "--bind-host", "0.0.0.0"]
     networks:
       - internal
     environment:
-      SERVICE_ROLE: admin
-      BIND_ADDR: "0.0.0.0:8083"
       DATABASE_URL: "postgres://postgres:5432"
-      PGUSER: "${POSTGRES_ADMIN_USER}"
-      PGPASSWORD: "${POSTGRES_ADMIN_PASSWORD}"
+      PGUSER: "${PORTAL_DB_USER}"
+      PGPASSWORD: "${PORTAL_DB_PASSWORD}"
       PGDATABASE: "${POSTGRES_DB}"
       MAIL_HOST: "mailhog"
       MAIL_PORT: "${MAIL_PORT}"
@@ -144,13 +149,13 @@ services:
         condition: service_healthy
       mailhog:
         condition: service_started
+    restart: unless-stopped
 
   frontend:
     image: "${PORTAL_IMAGE_PREFIX:-ghcr.io/sijma}/military-portal-frontend:${PORTAL_IMAGE_TAG:-latest}"
-    build: frontend
     networks:
       - internal
+    restart: unless-stopped
 
 volumes:
   pgdata:
-  keycloak_data:

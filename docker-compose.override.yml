@@ -1,0 +1,23 @@
+services:
+  keycloak:
+    command: start-dev --import-realm --hostname-backchannel-dynamic=true
+    environment:
+      KC_HOSTNAME_STRICT: "false"
+    ports:
+      - "${KEYCLOAK_HTTP_PORT:-8080}:8080"
+
+  mailhog:
+    ports:
+      - "${MAILHOG_UI_PORT:-8025}:8025"
+
+  citizen-service:
+    build: backend
+
+  officer-service:
+    build: backend
+
+  admin-service:
+    build: backend
+
+  frontend:
+    build: frontend
