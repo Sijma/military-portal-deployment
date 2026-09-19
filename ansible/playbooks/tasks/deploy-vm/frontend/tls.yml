@@ -1,0 +1,49 @@
+---
+- name: Set up TLS on the public entry point
+  when: BROWSER_BASE_URL is match('^https://')
+  block:
+    - name: Create the nginx ACME state directory
+      file:
+        path: /var/cache/nginx/acme-letsencrypt
+        state: directory
+        owner: nginx
+        group: nginx
+        mode: "0700"
+
+    - name: Install the public site
+      template:
+        src: "{{ portal_template_dir }}/nginx-public.conf.j2"
+        dest: /etc/nginx/conf.d/portal-public.conf
+      notify: Restart nginx
+
+- name: Validate the nginx config
+  command: nginx -t
+  changed_when: false
+  tags: [application, tls]
+
+- name: Apply nginx config changes
+  meta: flush_handlers
+
+- name: Wait for nginx to obtain the certificate
+  command:
+    argv:
+      - curl
+      - --silent
+      - --show-error
+      - --noproxy
+      - "*"
+      - --connect-timeout
+      - "5"
+      - --max-time
+      - "10"
+      - --output
+      - /dev/null
+      - --resolve
+      - "{{ portal_domain }}:443:{{ frontend_address }}"
+      - "https://{{ portal_domain }}/"
+  register: portal_tls_check
+  changed_when: false
+  retries: 30
+  delay: 5
+  until: portal_tls_check.rc == 0
+  when: BROWSER_BASE_URL is match('^https://')
