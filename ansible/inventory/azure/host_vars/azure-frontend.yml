@@ -1,0 +1,4 @@
+---
+frontend_release_url: https://github.com/Sijma/military-portal-frontend/releases/latest/download/frontend-dist.tar.gz
+keycloak_version: "26.7.0"
+mailhog_version: "1.0.1"

@@ -1,0 +1,58 @@
+---
+- name: Install frontend application prerequisites
+  apt:
+    name: nginx
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create the frontend release cache
+  file:
+    path: /var/cache/military-portal
+    state: directory
+    owner: root
+    group: root
+
+- name: Download the compressed frontend release
+  get_url:
+    url: "{{ frontend_release_url }}"
+    dest: /var/cache/military-portal/frontend-dist.tar.gz
+    checksum: "{{ frontend_release_checksum | default(omit, true) }}"
+    owner: root
+    group: root
+  register: frontend_archive
+
+- name: Create the frontend web root
+  file:
+    path: /var/www/portal
+    state: directory
+    owner: root
+    group: root
+
+- name: Check if the frontend is already installed
+  stat:
+    path: /var/www/portal/index.html
+  register: frontend_index
+
+- name: Unpack the frontend release
+  unarchive:
+    src: /var/cache/military-portal/frontend-dist.tar.gz
+    dest: /var/www/portal
+    remote_src: true
+    owner: root
+    group: root
+  when: frontend_archive.changed or not frontend_index.stat.exists
+
+- name: Copy loopback nginx config
+  copy:
+    src: "{{ portal_project_root }}/ansible/files/nginx-portal.conf"
+    dest: /etc/nginx/sites-available/default
+    owner: root
+    group: root
+  notify: Restart nginx
+
+- name: Enable and start nginx
+  service:
+    name: nginx
+    state: started
+    enabled: true

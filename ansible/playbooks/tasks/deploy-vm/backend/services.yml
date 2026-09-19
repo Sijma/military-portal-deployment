@@ -1,0 +1,43 @@
+---
+- name: Download the backend release
+  get_url:
+    url: "{{ backend_release_url }}"
+    dest: /usr/local/bin/military-portal
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart backend services
+
+- name: Install the backend systemd service template
+  template:
+    src: "{{ portal_template_dir }}/military-portal@.service.j2"
+    dest: /etc/systemd/system/military-portal@.service
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Restart backend services
+
+- name: Enable and start backend services
+  systemd_service:
+    name: "military-portal@{{ item.name }}:{{ item.port }}"
+    state: started
+    enabled: true
+    daemon_reload: true
+  loop: "{{ backend_services }}"
+  loop_control:
+    label: "{{ item.name }}:{{ item.port }}"
+
+- name: Apply backend handlers before health checks
+  meta: flush_handlers
+
+- name: Wait for backend services
+  uri:
+    url: "http://{{ backend_address }}:{{ item.port }}/health"
+    status_code: 200
+    return_content: true
+  register: backend_health
+  retries: 20
+  delay: 3
+  until: backend_health.status == 200
+  loop: "{{ backend_services }}"

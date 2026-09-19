@@ -1,0 +1,100 @@
+---
+- name: Install APISIX prerequisites
+  apt:
+    name: python3-debian
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create the apt keyring directory
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+
+- name: Fetch the APISIX signing key
+  get_url:
+    url: https://repos.apiseven.com/pubkey.gpg
+    dest: /etc/apt/keyrings/apisix.gpg
+    owner: root
+    group: root
+
+- name: Configure the APISIX repository
+  ansible.builtin.deb822_repository:
+    name: apisix
+    types: [deb]
+    uris: https://repos.apiseven.com/packages/debian
+    suites: debian12
+    components: [main]
+    signed_by: /etc/apt/keyrings/apisix.gpg
+    install_python_debian: true
+    state: present
+
+- name: Install APISIX
+  apt:
+    name: apisix
+    state: present
+    update_cache: true
+    policy_rc_d: 101
+
+- name: Read installed service state
+  service_facts:
+
+- name: Disable the standalone OpenResty service
+  systemd_service:
+    name: openresty
+    state: stopped
+    enabled: false
+  when: "'openresty.service' in ansible_facts.services"
+
+- name: Copy the APISIX configs and plugin
+  copy:
+    src: "{{ portal_project_root }}/apisix/{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+  loop:
+    - { src: config.yaml, dest: /usr/local/apisix/conf/config.yaml }
+    - { src: apisix.yaml, dest: /usr/local/apisix/conf/apisix.yaml }
+    - { src: plugins/app-auth.lua, dest: /usr/local/apisix/apisix/plugins/app-auth.lua }
+  notify: Restart APISIX
+
+- name: Create the APISIX systemd override directory
+  file:
+    path: /etc/systemd/system/apisix.service.d
+    state: directory
+    owner: root
+    group: root
+
+- name: Configure the APISIX systemd environment
+  template:
+    src: "{{ portal_template_dir }}/apisix.service.j2"
+    dest: /etc/systemd/system/apisix.service.d/override.conf
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Restart APISIX
+
+- name: Validate the APISIX configuration
+  command: apisix test
+  environment:
+    APISIX_OIDC_CLIENT_SECRET: "{{ APISIX_OIDC_CLIENT_SECRET }}"
+    APISIX_SESSION_SECRET: "{{ APISIX_SESSION_SECRET }}"
+    BROWSER_BASE_URL: "{{ BROWSER_BASE_URL }}"
+    KEYCLOAK_HOST: 127.0.0.1
+    FRONTEND_HOST: 127.0.0.1
+    MAIL_HOST: 127.0.0.1
+    CITIZEN_HOST: "{{ backend_address }}"
+    OFFICER_HOST: "{{ backend_address }}"
+    ADMIN_HOST: "{{ backend_address }}"
+  changed_when: false
+  no_log: true
+
+- name: Enable and start APISIX
+  systemd_service:
+    name: apisix
+    state: started
+    enabled: true
+    daemon_reload: true

@@ -1,0 +1,100 @@
+---
+- name: Install Keycloak prerequisites
+  apt:
+    name: openjdk-17-jre-headless
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create the Keycloak release cache
+  file:
+    path: /var/cache/military-portal
+    state: directory
+    owner: root
+    group: root
+
+- name: Create a Keycloak service account
+  user:
+    name: keycloak
+    system: true
+    home: /var/lib/keycloak
+    create_home: true
+    shell: /usr/sbin/nologin # prevents interactive shell as keycloak user.
+
+- name: Download Keycloak
+  get_url:
+    url: "https://github.com/keycloak/keycloak/releases/download/{{ keycloak_version }}/keycloak-{{ keycloak_version }}.tar.gz"
+    dest: "/var/cache/military-portal/keycloak-{{ keycloak_version }}.tar.gz"
+    checksum: "{{ keycloak_checksum | default(omit, true) }}"
+    owner: root
+    group: root
+
+- name: Extract compressed Keycloak release
+  unarchive:
+    src: "/var/cache/military-portal/keycloak-{{ keycloak_version }}.tar.gz"
+    dest: /opt
+    remote_src: true
+    creates: "{{ keycloak_home }}"
+  register: keycloak_extract
+
+- name: Build Keycloak
+  command:
+    argv:
+      - "{{ keycloak_home }}/bin/kc.sh"
+      - build
+      - --db=postgres
+      - --health-enabled=true
+  when: keycloak_extract.changed
+  notify: Restart Keycloak
+
+- name: Give Keycloak ownership of its data dir
+  file:
+    path: "{{ keycloak_home }}/data"
+    state: directory
+    owner: keycloak
+    group: keycloak
+    recurse: true
+
+- name: Create the Keycloak realm import dir
+  file:
+    path: "{{ keycloak_home }}/data/import"
+    state: directory
+    owner: keycloak
+    group: keycloak
+
+- name: Copy the exported Keycloak realm
+  copy:
+    src: "{{ portal_project_root }}/keycloak/realm-export.json"
+    dest: "{{ keycloak_home }}/data/import/realm-export.json"
+    owner: keycloak
+    group: keycloak
+  notify: Restart Keycloak
+
+- name: Install the Keycloak systemd service
+  template:
+    src: "{{ portal_template_dir }}/keycloak.service.j2"
+    dest: /etc/systemd/system/keycloak.service
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Restart Keycloak
+
+- name: Enable and start Keycloak
+  systemd_service:
+    name: keycloak
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Apply Keycloak changes before health check
+  meta: flush_handlers
+
+- name: Wait for Keycloak readiness
+  uri:
+    url: http://127.0.0.1:9000/health/ready
+    status_code: 200
+  register: keycloak_health
+  retries: 40
+  delay: 5
+  until: keycloak_health.status == 200

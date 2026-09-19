@@ -1,0 +1,40 @@
+[Unit]
+Description=Military Portal - %I Service
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+ExecStart=/usr/local/bin/military-portal --service-instance %I --bind-host {{ backend_address }}
+Restart=always
+RestartSec=5s
+
+Environment="DATABASE_URL=postgres://127.0.0.1:5432"
+Environment="PGUSER={{ PORTAL_DB_USER }}"
+Environment="PGPASSWORD={{ PORTAL_DB_PASSWORD }}"
+Environment="PGDATABASE={{ POSTGRES_DB }}"
+Environment="RUST_LOG=info"
+Environment="MAIL_HOST={{ frontend_address }}"
+Environment="MAIL_PORT={{ MAIL_PORT }}"
+Environment="MAIL_FROM={{ MAIL_FROM }}"
+
+# Temporary user for each service instance
+DynamicUser=yes
+
+# Prevent privilege elevation
+NoNewPrivileges=yes
+
+# Private, isolated temporary directory
+PrivateTmp=yes
+
+# Hide home directories from the service
+ProtectHome=yes
+
+# Mount the filesystem read-only for the service
+ProtectSystem=strict
+
+# Allow only local sockets and IPv4/IPv6 networking
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,136 @@
+---
+# Native deployment on two VMs.
+- name: Prepare VMs
+  hosts: frontend_vm:backend_vm
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Install common VM prerequisites
+      ansible.builtin.apt:
+        name: ca-certificates
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+      tags: always
+
+- name: Configure the backend VM
+  hosts: backend_vm
+  gather_facts: false
+  become: true
+  force_handlers: true
+  vars:
+    portal_project_root: "{{ playbook_dir }}/../.."
+    portal_template_dir: "{{ playbook_dir }}/../templates"
+    frontend_address: >-
+      {{ hostvars[groups['frontend_vm'] | first].ansible_facts.default_ipv4.address }}
+    backend_address: "{{ ansible_facts.default_ipv4.address }}"
+
+  tasks:
+    - name: Load PostgreSQL tasks
+      ansible.builtin.import_tasks: tasks/deploy-vm/backend/postgres.yml
+      tags: [backend, postgres]
+
+    - name: Load backend service tasks
+      ansible.builtin.import_tasks: tasks/deploy-vm/backend/services.yml
+      tags: [backend, services]
+
+  handlers:
+    - name: Restart PostgreSQL
+      ansible.builtin.service:
+        name: postgresql
+        state: restarted
+
+    - name: Restart backend services
+      ansible.builtin.systemd_service:
+        name: "military-portal@{{ item.name }}:{{ item.port }}"
+        state: restarted
+        daemon_reload: true
+      loop: "{{ backend_services }}"
+
+- name: Configure the frontend VM
+  hosts: frontend_vm
+  gather_facts: false
+  become: true
+  force_handlers: true
+  vars:
+    portal_project_root: "{{ playbook_dir }}/../.."
+    portal_template_dir: "{{ playbook_dir }}/../templates"
+    backend_address: >-
+      {{ hostvars[groups['backend_vm'] | first].ansible_facts.default_ipv4.address }}
+    frontend_address: "{{ ansible_facts.default_ipv4.address }}"
+
+  tasks:
+    - name: Load Keycloak tasks
+      ansible.builtin.import_tasks: tasks/deploy-vm/frontend/keycloak.yml
+      vars:
+        keycloak_home: "/opt/keycloak-{{ keycloak_version }}"
+      tags: [frontend, keycloak]
+
+    - name: Load MailHog tasks
+      ansible.builtin.import_tasks: tasks/deploy-vm/frontend/mailhog.yml
+      tags: [frontend, mail]
+
+    - name: Load frontend application tasks
+      ansible.builtin.import_tasks: tasks/deploy-vm/frontend/application.yml
+      tags: [frontend, application]
+
+    - name: Load TLS and nginx validation tasks
+      ansible.builtin.import_tasks: tasks/deploy-vm/frontend/tls.yml
+      vars:
+        portal_domain: "{{ BROWSER_BASE_URL | urlsplit('hostname') }}"
+        portal_cert_live: "/etc/letsencrypt/live/{{ portal_domain }}/fullchain.pem"
+      tags: [frontend, tls]
+
+    - name: Load APISIX tasks
+      ansible.builtin.import_tasks: tasks/deploy-vm/frontend/apisix.yml
+      tags: [frontend, gateway]
+
+    - name: Apply frontend changes before integration checks
+      ansible.builtin.meta: flush_handlers
+      tags: [frontend, gateway]
+
+    - name: Verify frontend-to-backend connectivity
+      ansible.builtin.uri:
+        url: "http://{{ backend_address }}:{{ item.port }}/health"
+        status_code: 200
+      register: frontend_backend_health
+      retries: 10
+      delay: 3
+      until: frontend_backend_health.status == 200
+      loop: "{{ backend_services }}"
+      tags: [frontend, gateway]
+
+    - name: Verify the gateway can reach Keycloak
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9080/realms/military-portal/.well-known/openid-configuration
+        status_code: 200
+      register: gateway_health
+      retries: 20
+      delay: 3
+      until: gateway_health.status == 200
+      tags: [frontend, gateway]
+
+  handlers:
+    - name: Restart Keycloak
+      ansible.builtin.systemd_service:
+        name: keycloak
+        state: restarted
+        daemon_reload: true
+
+    - name: Restart MailHog
+      ansible.builtin.systemd_service:
+        name: mailhog
+        state: restarted
+        daemon_reload: true
+
+    - name: Restart nginx
+      ansible.builtin.service:
+        name: nginx
+        state: restarted
+
+    - name: Restart APISIX
+      ansible.builtin.systemd_service:
+        name: apisix
+        state: restarted
+        daemon_reload: true

@@ -1,0 +1,25 @@
+---
+# Public endpoint
+BROWSER_BASE_URL: https://military-portal.polandcentral.cloudapp.azure.com
+
+# Backend instances
+backend_services:
+  - name: citizen
+    port: 8081
+  - name: officer
+    port: 8082
+  - name: admin
+    port: 8083
+
+# Postgres
+POSTGRES_ADMIN_USER: postgres
+POSTGRES_DB: military_portal
+PORTAL_DB_USER: military_portal
+KEYCLOAK_DB_NAME: keycloak
+KEYCLOAK_DB_USER: keycloak
+
+# Keycloak and email
+KEYCLOAK_ADMIN_USERNAME: admin
+KEYCLOAK_SSL_REQUIRED: external
+MAIL_PORT: "1025"
+MAIL_FROM: Military Portal <no-reply@military-portal.local>

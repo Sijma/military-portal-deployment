@@ -1,0 +1,121 @@
+---
+- name: Install Postgres packages
+  apt:
+    name:
+      - acl
+      - postgresql
+      - python3-psycopg2
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure PostgreSQL is enabled and running
+  service:
+    name: postgresql
+    state: started
+    enabled: true
+
+- name: Set Postgres admin credentials
+  community.postgresql.postgresql_user:
+    name: "{{ POSTGRES_ADMIN_USER }}"
+    password: "{{ POSTGRES_ADMIN_PASSWORD }}"
+    role_attr_flags: SUPERUSER
+  become_user: postgres
+  no_log: true
+
+- name: Create portal db user
+  community.postgresql.postgresql_user:
+    name: "{{ PORTAL_DB_USER }}"
+    password: "{{ PORTAL_DB_PASSWORD }}"
+    role_attr_flags: LOGIN,NOSUPERUSER,NOCREATEDB,NOCREATEROLE,NOREPLICATION
+  become_user: postgres
+  no_log: true
+
+- name: Create keycloak db user
+  community.postgresql.postgresql_user:
+    name: "{{ KEYCLOAK_DB_USER }}"
+    password: "{{ KEYCLOAK_DB_PASSWORD }}"
+    role_attr_flags: LOGIN,NOSUPERUSER,NOCREATEDB,NOCREATEROLE,NOREPLICATION
+  become_user: postgres
+  no_log: true
+
+- name: Create portal db
+  community.postgresql.postgresql_db:
+    name: "{{ POSTGRES_DB }}"
+    owner: "{{ PORTAL_DB_USER }}"
+  become_user: postgres
+
+- name: Create keycloak db
+  community.postgresql.postgresql_db:
+    name: "{{ KEYCLOAK_DB_NAME }}"
+    owner: "{{ KEYCLOAK_DB_USER }}"
+  become_user: postgres
+
+- name: Create the schema dir
+  file:
+    path: /usr/local/share/military-portal
+    state: directory
+    owner: root
+    group: root
+
+- name: Copy schema to the database VM
+  copy:
+    src: "{{ portal_project_root }}/postgres/init.sql"
+    dest: /usr/local/share/military-portal/init.sql
+    owner: root
+    group: root
+
+- name: Apply the schema
+  community.postgresql.postgresql_script:
+    login_host: 127.0.0.1
+    login_db: "{{ POSTGRES_DB }}"
+    login_user: "{{ PORTAL_DB_USER }}"
+    login_password: "{{ PORTAL_DB_PASSWORD }}"
+    path: /usr/local/share/military-portal/init.sql
+  no_log: true
+
+- name: Query the postgres hba file
+  community.postgresql.postgresql_query:
+    login_db: postgres
+    query: SHOW hba_file
+  become_user: postgres
+  register: postgres_hba
+  changed_when: false
+
+- name: Listen only on loopback and the backend private address
+  community.postgresql.postgresql_alter_system:
+    param: listen_addresses
+    value: "127.0.0.1,{{ backend_address }}"
+  become_user: postgres
+  notify: Restart PostgreSQL
+
+- name: Allow only the required TCP database clients
+  community.postgresql.postgresql_pg_hba:
+    dest: "{{ postgres_hba.query_result[0].hba_file }}"
+    rules:
+      - contype: host
+        databases: "{{ KEYCLOAK_DB_NAME }}"
+        users: "{{ KEYCLOAK_DB_USER }}"
+        address: "{{ frontend_address }}/32"
+        method: scram-sha-256
+      - contype: host
+        databases: "{{ POSTGRES_DB }}"
+        users: "{{ PORTAL_DB_USER }}"
+        address: 127.0.0.1/32
+        method: scram-sha-256
+  notify: Restart PostgreSQL
+
+- name: Apply PostgreSQL changes before checking readiness
+  meta: flush_handlers
+
+- name: Wait for PostgreSQL readiness
+  community.postgresql.postgresql_ping:
+    login_host: 127.0.0.1
+    login_db: "{{ POSTGRES_DB }}"
+    login_user: "{{ PORTAL_DB_USER }}"
+    login_password: "{{ PORTAL_DB_PASSWORD }}"
+  register: postgres_health
+  retries: 10
+  delay: 2
+  until: postgres_health.is_available
+  no_log: true

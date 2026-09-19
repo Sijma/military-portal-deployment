@@ -1,0 +1,37 @@
+[Unit]
+Description=Keycloak Service
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=keycloak
+Group=keycloak
+WorkingDirectory={{ keycloak_home }}
+
+Environment="KC_DB_URL=jdbc:postgresql://{{ backend_address }}:5432/{{ KEYCLOAK_DB_NAME }}"
+Environment="KC_DB_USERNAME={{ KEYCLOAK_DB_USER }}"
+Environment="KC_DB_PASSWORD={{ KEYCLOAK_DB_PASSWORD }}"
+Environment="KC_BOOTSTRAP_ADMIN_USERNAME={{ KEYCLOAK_ADMIN_USERNAME }}"
+Environment="KC_BOOTSTRAP_ADMIN_PASSWORD={{ KEYCLOAK_ADMIN_PASSWORD }}"
+Environment="KC_HOSTNAME={{ BROWSER_BASE_URL }}"
+Environment="KEYCLOAK_SSL_REQUIRED={{ KEYCLOAK_SSL_REQUIRED }}"
+Environment="APISIX_OIDC_CLIENT_SECRET={{ APISIX_OIDC_CLIENT_SECRET }}"
+Environment="CITIZEN_DEMO_PASSWORD={{ CITIZEN_DEMO_PASSWORD }}"
+Environment="OFFICER_DEMO_PASSWORD={{ OFFICER_DEMO_PASSWORD }}"
+Environment="ADMIN_DEMO_PASSWORD={{ ADMIN_DEMO_PASSWORD }}"
+
+ExecStart={{ keycloak_home }}/bin/kc.sh start --optimized --import-realm --hostname-backchannel-dynamic=true --http-enabled=true --http-host=127.0.0.1 --http-management-host=127.0.0.1 --proxy-headers=xforwarded
+Restart=on-failure
+RestartSec=10s
+TimeoutStartSec=180s
+
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

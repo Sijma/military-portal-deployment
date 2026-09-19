@@ -1,0 +1,18 @@
+[Unit]
+Description=MailHog Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/mailhog -smtp-bind-addr {{ frontend_address }}:{{ MAIL_PORT }} -api-bind-addr 127.0.0.1:8025 -ui-bind-addr 127.0.0.1:8025 -ui-web-path mail
+Restart=on-failure
+RestartSec=5s
+DynamicUser=yes
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target
