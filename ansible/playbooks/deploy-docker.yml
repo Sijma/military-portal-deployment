@@ -28,6 +28,14 @@
       PORTAL_IMAGE_TAG: "{{ PORTAL_IMAGE_TAG }}"
       KEYCLOAK_SSL_REQUIRED: "{{ KEYCLOAK_SSL_REQUIRED }}"
 
+  pre_tasks:
+    - name: get VM public ip
+      community.general.ipify_facts:
+
+    - name: Set the public browser URL
+      ansible.builtin.set_fact:
+        BROWSER_BASE_URL: "http://{{ ansible_facts['ipify_public_ip'] }}:{{ PORTAL_HTTP_PORT }}"
+
   tasks:
     - name: make app dir
       file:
@@ -52,6 +60,8 @@
           - docker-compose.yml
         services:
           - citizen-service
+          - officer-service
+          - admin-service
           - frontend
           - mailhog
         policy: always
