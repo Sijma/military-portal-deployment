@@ -114,11 +114,6 @@ routes:
   - id: mailhog
     uris: ["/mail", "/mail/*"]
     priority: 150
-    plugin_config_id: oidc-browser
-
-    plugins:
-      app-auth:
-        role: any
 
     upstream:
       type: roundrobin
