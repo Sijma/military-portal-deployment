@@ -4,3 +4,4 @@ env/*
 
 # exclude files that end with .example
 !env/*.example
+/ansible/.ansible_vault_pass
