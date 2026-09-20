@@ -111,6 +111,16 @@ routes:
       nodes:
         "${{KEYCLOAK_HOST}}:8080": 1
 
+  # Keycloak handles auth for its own admin console.
+  - id: keycloak-admin
+    uris: ["/admin", "/admin/*"]
+    priority: 150
+
+    upstream:
+      type: roundrobin
+      nodes:
+        "${{KEYCLOAK_HOST}}:8080": 1
+
   - id: mailhog
     uris: ["/mail", "/mail/*"]
     priority: 150
