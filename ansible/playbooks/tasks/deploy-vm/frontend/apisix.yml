@@ -80,6 +80,7 @@
 - name: Validate the APISIX configuration
   command: apisix test
   environment:
+    APISIX_LISTEN_ADDRESS: 127.0.0.1
     APISIX_OIDC_CLIENT_SECRET: "{{ APISIX_OIDC_CLIENT_SECRET }}"
     APISIX_SESSION_SECRET: "{{ APISIX_SESSION_SECRET }}"
     BROWSER_BASE_URL: "{{ BROWSER_BASE_URL }}"
