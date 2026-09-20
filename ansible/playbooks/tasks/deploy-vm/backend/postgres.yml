@@ -58,10 +58,10 @@
     owner: root
     group: root
 
-- name: Copy schema to the database VM
+- name: Copy the application schema to the database VM
   copy:
-    src: "{{ portal_project_root }}/postgres/init.sql"
-    dest: /usr/local/share/military-portal/init.sql
+    src: "{{ portal_project_root }}/postgres/schema.sql"
+    dest: /usr/local/share/military-portal/schema.sql
     owner: root
     group: root
 
@@ -71,7 +71,7 @@
     login_db: "{{ POSTGRES_DB }}"
     login_user: "{{ PORTAL_DB_USER }}"
     login_password: "{{ PORTAL_DB_PASSWORD }}"
-    path: /usr/local/share/military-portal/init.sql
+    path: /usr/local/share/military-portal/schema.sql
   no_log: true
 
 - name: Query the postgres hba file
