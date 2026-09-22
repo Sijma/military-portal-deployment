@@ -54,6 +54,7 @@ The inventory is located in `ansible/inventory/azure/`:
 - SSH targets: `hosts.yml` (in the current repo, `.ssh/config` aliases are used in hosts)
 
 Ansible reads the vault password from the gitignored `ansible/.ansible_vault_pass` file.
+You can create your own vault by copying `vault.yml.example` into `vault.yml` and filling the respective fields.
 
 Install the required collections before either deployment:
 
