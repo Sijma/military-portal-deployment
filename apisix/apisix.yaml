@@ -49,57 +49,55 @@ routes:
         role: any
         respond_with_identity: true
 
-  - id: api-citizen
-    uris: ["/api/citizen", "/api/citizen/*"]
+  - id: api
+    uris: ["/api", "/api/*"]
     priority: 100
     plugin_config_id: oidc-api
 
     plugins:
       app-auth:
-        role: citizen
+        role: any
 
       # Removes the '/api' uri prefix that goes into the backend.
       proxy-rewrite:
-        regex_uri: ["^/api/citizen/?(.*)", "/${1}"]
+        regex_uri: ["^/api/?(.*)", "/${1}"]
+
+      traffic-split:
+        rules:
+          - match:
+              - vars:
+                  - ["http_x-user-role", "==", "citizen"]
+            weighted_upstreams:
+              - upstream:
+                  type: roundrobin
+                  nodes:
+                    "${{CITIZEN_HOST}}:8081": 1
+                weight: 1
+
+          - match:
+              - vars:
+                  - ["http_x-user-role", "==", "officer"]
+            weighted_upstreams:
+              - upstream:
+                  type: roundrobin
+                  nodes:
+                    "${{OFFICER_HOST}}:8082": 1
+                weight: 1
+
+          - match:
+              - vars:
+                  - ["http_x-user-role", "==", "admin"]
+            weighted_upstreams:
+              - upstream:
+                  type: roundrobin
+                  nodes:
+                    "${{ADMIN_HOST}}:8083": 1
+                weight: 1
 
     upstream:
       type: roundrobin
       nodes:
         "${{CITIZEN_HOST}}:8081": 1
-
-  - id: api-officer
-    uris: [ "/api/officer", "/api/officer/*" ]
-    priority: 100
-    plugin_config_id: oidc-api
-
-    plugins:
-      app-auth:
-        role: officer
-
-      proxy-rewrite:
-        regex_uri: [ "^/api/officer/?(.*)", "/${1}" ]
-
-    upstream:
-      type: roundrobin
-      nodes:
-        "${{OFFICER_HOST}}:8082": 1
-
-  - id: api-admin
-    uris: [ "/api/admin", "/api/admin/*" ]
-    priority: 100
-    plugin_config_id: oidc-api
-
-    plugins:
-      app-auth:
-        role: admin
-
-      proxy-rewrite:
-        regex_uri: [ "^/api/admin/?(.*)", "/${1}" ]
-
-    upstream:
-      type: roundrobin
-      nodes:
-        "${{ADMIN_HOST}}:8083": 1
 
   # browser routing to keycloak's necessary paths and resources
   - id: keycloak

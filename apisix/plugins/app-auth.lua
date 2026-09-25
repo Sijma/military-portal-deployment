@@ -7,7 +7,10 @@ local plugin_name = "app-auth"
 local schema = {
     type = "object",
     properties = {
-        role = { type = "string" },
+        role = {
+            type = "string",
+            enum = {"any", "citizen", "officer", "admin"}
+        },
         respond_with_identity = { type = "boolean", default = false }
     },
     required = {"role"}
@@ -15,7 +18,7 @@ local schema = {
 
 local _M = {
     version = 1.0,
-    priority = 2000, -- run after oidc (2599) and before proxy-rewrite (1008)
+    priority = 2000, -- run after OIDC and before traffic-split in the access phase
     name = plugin_name,
     schema = schema
 }
@@ -46,16 +49,33 @@ local function get_userinfo(ctx)
     return info
 end
 
--- First recognized role from realm roles.
+-- Require one unambiguous application role from the realm roles.
 local function get_role(info)
+    local recognized_roles = {}
+    local role_count = 0
+
     if info.realm_access and type(info.realm_access.roles) == "table" then
         for _, r in ipairs(info.realm_access.roles) do
-            if r == "admin" or r == "officer" or r == "citizen" then
-                return r
+            if (r == "admin" or r == "officer" or r == "citizen")
+                and not recognized_roles[r]
+            then
+                recognized_roles[r] = true
+                role_count = role_count + 1
             end
         end
     end
-    return nil
+
+    if role_count == 0 then
+        return nil, "no valid role found in identity token"
+    end
+
+    if role_count > 1 then
+        return nil, "multiple application roles found in identity token"
+    end
+
+    for role in pairs(recognized_roles) do
+        return role
+    end
 end
 
 local function is_allowed(user_role, required_role)
@@ -69,10 +89,10 @@ function _M.access(conf, ctx)
         return 401, cjson.encode({ message = err })
     end
 
-    local role = get_role(info)
+    local role, role_err = get_role(info)
     if not role then
         core.response.set_header("Content-Type", "application/json")
-        return 403, cjson.encode({ message = "no valid role found in identity token" })
+        return 403, cjson.encode({ message = role_err })
     end
 
     if conf.role ~= "any" then

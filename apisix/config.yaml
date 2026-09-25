@@ -17,6 +17,7 @@ plugins:
   - app-auth
   - openid-connect
   - proxy-rewrite
+  - traffic-split
   - real-ip
   - cors
   - prometheus
